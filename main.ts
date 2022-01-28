@@ -38,125 +38,119 @@ class Point {
   add(other: Point): Point {
     return new Point(this.x + other.x, this.y + other.y);
   }
+  sub(other: Point): Point {
+    return new Point(this.x - other.x, this.y - other.y);
+  }
+  mult(other: number): Point {
+    return new Point(this.x * other, this.y * other);
+  }
   _add(other: Point): void {
     this.x += other.x;
     this.y += other.y;
   }
-}
-
-type Position = Point;
-
-type Board = [number, number];
-
-enum Direction {
-  Up,
-  Down,
-  Left,
-  Right,
-}
-
-function toPos(d: Direction): Position {
-  switch (d) {
-    case Direction.Up: return new Point(0, -1);
-    case Direction.Down: return new Point(0, 1);
-    case Direction.Left: return new Point(-1, 0);
-    case Direction.Right: return new Point(1, 0);
+  _compare(): ((other: Point) => boolean) {
+    return (other: Point) => { return this.x === other.x && this.y === other.y; };
+  }
+  copy(): Point {
+    return new Point(this.x, this.y);
   }
 }
 
-class RenderComponent {
-  render: (pos: Position) => any;
-}
-
-class ControllerComponent {
-  direction: Direction | null;
-}
-
-class GridComponent {
-  position: Position;
-}
-
-class Entity {
-  index: number;
-  generation: number;
-  constructor(i: number, g: number) {
-    this.index = i;
-    this.generation = g;
+class Board {
+  width: number;
+  height: number;
+  size: number;
+  constructor(w, h, s) {
+    this.width = w;
+    this.height = h;
+    this.size = s;
   }
-}
-
-class Item<K, V> {
-  key: K;
-  value: V;
-  constructor(k: K, v: V) {
-    this.key = k;
-    this.value = v;
+  inBounds(i: number, j: number): boolean {
+    return i < 0 || i >= this.width || j < 0 || j >= this.height;
   }
-}
-
-class EntityMap<T> {
-  entries: Item<Entity, T>[];
-  constructor() {
-    this.entries = [];
-  }
-  add(index: Entity, value: T) {
-    for (var e of this.entries) {
-      if (e.key.index === index.index && e.key.generation <= index.generation) {
-        e.value = value;
-        e.key = index;
-        return;
-      }
+  centerOf(i: number, j: number, corner: Point): Point | null {
+    if ((i < 0 || i >= this.width) || (j < 0 || j >= this.height)) {
+      return null;
     }
-    this.entries.push(new Item(index, value));
+    return corner.add(new Point(i * this.size + this.size / 2, j * this.size + this.size / 2));
   }
-  get(index: Entity): T | null {
-    for (var e of this.entries) {
-      if (e.key.index === index.index && e.key.generation === index.generation) {
-        return e.value;
-      }
+  draw(corner: Point) {
+    for (var i = 0; i < this.width + 1; i++) {
+      drawLine(corner.add(new Point(i * this.size, 0)), corner.add(new Point(i * this.size, this.size * this.height)), "black");
     }
-    return null;
-  }
-  *[Symbol.iterator]() {
-    for (var i of this.entries) {
-      yield i;
+    for (var j = 0; j < this.height + 1; j++) {
+      drawLine(corner.add(new Point(0, j * this.size)), corner.add(new Point(this.size * this.width, j * this.size)), "black");
     }
   }
 }
 
-class Allocator {
-  index: number;
-  generation: number;
-  constructor() {
-    this.index = 0;
-    this.generation = 0;
-  }
-  newIndex(): Entity {
-    this.index += 1;
-    return new Entity(this.index - 1, this.generation);
-  }
-  newGeneration() {
-    this.index = 0;
-    this.generation += 1;
-  }
-}
 
-class GameState {
-  player: Entity;
-  render_components: EntityMap<RenderComponent>;
-  controller_components: EntityMap<ControllerComponent>;
-  grid_components: EntityMap<GridComponent>;
-  board: Board;
-  allocator: Allocator;
-}
 
-function keyDownHandler(event) {
-}
-function keyUpHandler(event) {
-}
+let b = new Board(10, 10, 50);
+let corner = new Point(250, 50);
+var player = new Point(2, 2);
+let playerPos: Array<Point> = [];
+playerPos.push(player.copy());
+let walls: Array<Point> = [];
+walls.push(new Point(3, 3));
+walls.push(new Point(1, 1));
+
+let holes: Array<Point> = [];
+holes.push(new Point(4, 4));
+holes.push(new Point(6, 6));
+let crates: Array<Point> = [];
+crates.push(new Point(5, 5));
+
+
 
 function draw() {
   clearAll();
+  b.draw(corner);
+  for (var w of walls) {
+    drawSquare(b.centerOf(w.x, w.y, corner), 50, "black");
+  }
+  for (var h of holes) {
+    drawSquare(b.centerOf(h.x, h.y, corner), 45, "grey");
+  }
+  for (var c of crates) {
+    drawSquare(b.centerOf(c.x, c.y, corner), 40, "brown");
+  }
+  let pp = b.centerOf(player.x, player.y, corner);
+  if (pp === null) {
+    player = playerPos.pop();
+    pp = b.centerOf(player.x, player.y, corner);
+  }
+  if (walls.some(player._compare())) {
+    player = playerPos.pop();
+    pp = b.centerOf(player.x, player.y, corner);
+  }
+  if (holes.some(player._compare())) {
+    player = playerPos.pop();
+    pp = b.centerOf(player.x, player.y, corner);
+  }
+  drawCircle(pp, 20, "green");
+  let prev = playerPos.slice(-1)[0];
+  if (prev.x != player.x || prev.y != player.y) {
+    playerPos.push(player.copy());
+  }
+  requestAnimationFrame(draw);
+}
+
+function keyDownHandler(event: KeyboardEvent) {
+}
+function keyUpHandler(event: KeyboardEvent) {
+  if (event.key === "ArrowUp") {
+    player.y -= 1;
+  }
+  if (event.key === "ArrowDown") {
+    player.y += 1;
+  }
+  if (event.key === "ArrowLeft") {
+    player.x -= 1;
+  }
+  if (event.key === "ArrowRight") {
+    player.x += 1;
+  }
 }
 
 document.addEventListener("keydown", keyDownHandler);
